@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "subset": "training",
+    "num_tasks": 2,
+    "max_attempts": 5,
+    "generated_at": "2026-10-16T22:30:31.478860+00:00",
+    "note": "Offline deterministic mock LLM used unless LLM_PROVIDER is configured."
+  },
+  "configurations": {
+    "baseline": {
+      "total_tasks": 2,
+      "solved": 0,
+      "success_rate": 0.0,
+      "average_attempts_per_solved_task": null,
+      "failure_modes": {
+        "wrong_test_output": 2
+      }
+    },
+    "full_system": {
+      "total_tasks": 2,
+      "solved": 0,
+      "success_rate": 0.0,
+      "average_attempts_per_solved_task": null,
+      "failure_modes": {
+        "no_solution": 2
+      }
+    }
+  },
+  "tasks": [
+    {
+      "task_id": "007bbfb7",
+      "baseline": {
+        "solved": false,
+        "failure_mode": "wrong_test_output",
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    return grid"
+      },
+      "full_system": {
+        "solved": false,
+        "failure_mode": "no_solution",
+        "attempts": 5,
+        "candidate_code": null
+      }
+    },
+    {
+      "task_id": "00d62c1b",
+      "baseline": {
+        "solved": false,
+        "failure_mode": "wrong_test_output",
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    return grid"
+      },
+      "full_system": {
+        "solved": false,
+        "failure_mode": "no_solution",
+        "attempts": 5,
+        "candidate_code": null
+      }
+    }
+  ]
+}
