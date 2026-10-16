@@ -16,14 +16,19 @@ PaperTrack/
 │   ├── verifier.py           # Strict 100%-match verification with diff feedback
 │   ├── visualizer.py         # Dual numeric + visual grid formatter
 │   ├── mdl_pruner.py         # MDL selector (Occam's razor) for candidate code
+│   ├── tta_transforms.py     # Test-time dihedral augmentation transforms
 │   └── circuits/
 │       ├── __init__.py       # Three-tier cognitive architecture package
 │       ├── long_circuit.py   # Global taxonomy + strategic macro-plan
 │       ├── middle_circuit.py # Object decomposition + tactical blueprint
 │       └── short_circuit.py  # Iterative generate → verify → self-correct loop
+├── scripts/
+│   └── download_arc_data.py  # Fetch public ARC-AGI tasks into data/arc_eval/
 ├── tests/
 │   ├── test_sandbox.py       # Sandbox + verifier tests
-│   └── test_circuits.py      # Three-tier architecture tests
+│   ├── test_circuits.py      # Three-tier architecture tests
+│   ├── test_mdl.py           # MDL selector tests
+│   └── test_tta.py           # TTA symmetry transform tests
 ├── main.py                   # End-to-end pipeline entry point
 ├── conftest.py               # Makes src/ importable for tests
 ├── pyproject.toml            # Project metadata + pytest configuration
@@ -69,6 +74,16 @@ The agent is organised as three tiers inside `src/circuits/`:
 3. **Short circuit** (`short_circuit.py`) — runs the iterative generate →
    verify → self-correct loop, feeding the verifier's differential feedback
    back into the next prompt.
+
+## LLM provider configuration
+
+The short circuit reads these environment variables to select a real LLM
+backend (it falls back to a deterministic offline mock when unset):
+
+* `LLM_PROVIDER` — `anthropic`, `openai`, `ollama`, or `vllm`.
+* `LLM_API_KEY` — API key (not needed for local Ollama).
+* `LLM_MODEL_NAME` — model name (falls back to a sensible default).
+* `LLM_BASE_URL` — optional endpoint override (Ollama / self-hosted vLLM).
 
 ## Core API
 

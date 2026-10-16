@@ -22,7 +22,11 @@ deployments) replace it via monkeypatching or by wiring an SDK call.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import urllib.error
+import urllib.request
 
 from mdl_pruner import select_best_candidate
 from verifier import verify_solution
@@ -161,37 +165,125 @@ def _build_prompt(
     return "\n".join(sections)
 
 
+_DEFAULT_MODELS: dict[str, str] = {
+    "anthropic": "claude-3-5-sonnet-latest",
+    "openai": "gpt-4o-mini",
+    "vllm": "meta-llama/Meta-Llama-3-8B-Instruct",
+    "ollama": "llama3",
+}
+
+
+def _http_post_json(url: str, payload: dict, headers: dict) -> dict:
+    """POST JSON to ``url`` and return the decoded JSON response.
+
+    Uses only the standard library so the scaffold stays dependency-free.
+    HTTP and network failures are re-raised as ``RuntimeError``.
+    """
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")
+        raise RuntimeError(f"LLM request failed (HTTP {exc.code}): {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"LLM request failed (network): {exc.reason}") from exc
+
+
+def _call_anthropic(prompt: str, api_key: str, model: str) -> str:
+    """Call the Anthropic Messages API and return the assistant text."""
+    url = "https://api.anthropic.com/v1/messages"
+    payload = {
+        "model": model,
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    data = _http_post_json(url, payload, headers)
+    return data["content"][0]["text"]
+
+
+def _call_openai(prompt: str, api_key: str, model: str, base_url: str) -> str:
+    """Call an OpenAI-compatible Chat Completions endpoint."""
+    base = base_url.rstrip("/") or "https://api.openai.com/v1"
+    url = f"{base}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.0,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    data = _http_post_json(url, payload, headers)
+    return data["choices"][0]["message"]["content"]
+
+
+def _call_ollama(prompt: str, model: str, base_url: str) -> str:
+    """Call a local Ollama server's /api/generate endpoint."""
+    base = base_url.rstrip("/") or "http://localhost:11434"
+    url = f"{base}/api/generate"
+    payload = {"model": model, "prompt": prompt, "stream": False}
+    data = _http_post_json(url, payload, {})
+    return data["response"]
+
+
+def _call_real_provider(prompt: str, provider: str) -> str:
+    """Dispatch ``prompt`` to the configured real LLM provider."""
+    api_key = os.environ.get("LLM_API_KEY", "").strip()
+    model = os.environ.get("LLM_MODEL_NAME", "").strip() or _DEFAULT_MODELS.get(provider, "")
+    base_url = os.environ.get("LLM_BASE_URL", "").strip()
+
+    if provider == "anthropic":
+        return _call_anthropic(prompt, api_key, model)
+    if provider == "openai":
+        return _call_openai(prompt, api_key, model, base_url)
+    if provider == "vllm":
+        # vLLM exposes an OpenAI-compatible /v1/chat/completions endpoint.
+        return _call_openai(prompt, api_key, model, base_url)
+    if provider == "ollama":
+        return _call_ollama(prompt, model, base_url)
+    raise ValueError(f"Unsupported LLM_PROVIDER: {provider!r}.")
+
+
 def _call_llm(prompt: str) -> str:
-    """Send a prompt to the LLM and return its raw textual response.
+    """Send a prompt to the configured LLM and return its raw response.
 
     This is the single seam through which the agent talks to a language model.
-    A production deployment would check for ``OPENAI_API_KEY`` /
-    ``ANTHROPIC_API_KEY`` and call the corresponding SDK here.  To keep the
-    scaffold dependency-free and testable offline, this default implementation
-    returns a deterministic mock that:
+    The provider is selected through environment variables:
 
-        * answers with an identity transform on the first attempt (wrong for
-          the sample task), then
-        * returns the corrected horizontal-mirror transform once the prompt
-          contains self-correction feedback.
+        * ``LLM_PROVIDER``   -- ``anthropic`` | ``openai`` | ``ollama`` | ``vllm``.
+        * ``LLM_API_KEY``    -- API key for cloud providers (Ollama needs none).
+        * ``LLM_MODEL_NAME`` -- model identifier (falls back to a per-provider default).
+        * ``LLM_BASE_URL``   -- optional endpoint override (Ollama / self-hosted vLLM).
 
-    The mock is intentionally simple; it exists to exercise the loop, not to
-    be a general solver.  Tests monkeypatch this function to simulate arbitrary
-    models.
+    When ``LLM_PROVIDER`` is unset, or a cloud provider is chosen without an
+    ``LLM_API_KEY``, the function falls back to a deterministic mock so the
+    scaffold and its unit tests remain fast and offline.
 
     Args:
         prompt: The assembled prompt.
 
     Returns:
-        str: The model's raw response.
+        str: The model's raw response (may be markdown-fenced).
     """
-    # -- real-client integration point -------------------------------------
-    # if os.environ.get("OPENAI_API_KEY"):
-    #     return _call_openai_sdk(prompt)
-    # if os.environ.get("ANTHROPIC_API_KEY"):
-    #     return _call_anthropic_sdk(prompt)
+    provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    api_key = os.environ.get("LLM_API_KEY", "").strip()
 
-    # -- deterministic offline mock ----------------------------------------
+    # Use a real provider only when explicitly configured.  Cloud providers
+    # additionally require an API key; otherwise fall through to the mock.
+    if provider:
+        needs_key = provider in ("anthropic", "openai", "vllm")
+        if not needs_key or api_key:
+            return _call_real_provider(prompt, provider)
+
+    # -- deterministic offline mock (no provider / API key configured) -----
     if _FEEDBACK_MARKER in prompt:
         return _MIRROR_SOLUTION
     return _IDENTITY_SOLUTION

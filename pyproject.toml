@@ -22,7 +22,7 @@ dev = [
 # setuptools at ``src/`` so both module kinds are discovered from the right
 # place during installation.
 package-dir = {"" = "src"}
-py-modules = ["sandbox", "verifier", "visualizer", "mdl_pruner"]
+py-modules = ["sandbox", "verifier", "visualizer", "mdl_pruner", "tta_transforms"]
 packages = ["circuits"]
 
 [tool.pytest.ini_options]

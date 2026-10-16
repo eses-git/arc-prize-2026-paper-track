@@ -30,3 +30,6 @@ env/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Downloaded datasets
+data/arc_eval/
