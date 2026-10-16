@@ -17,9 +17,13 @@ dev = [
 ]
 
 [tool.setuptools]
-# The agent's core modules live flat inside ``src/`` rather than in a nested
-# package, so declare them explicitly for installability.
-py-modules = ["sandbox", "verifier"]
+# The agent's core modules live inside ``src/``.  ``sandbox`` and ``verifier``
+# are flat modules while ``circuits`` is a package; ``package-dir`` points
+# setuptools at ``src/`` so both module kinds are discovered from the right
+# place during installation.
+package-dir = {"" = "src"}
+py-modules = ["sandbox", "verifier", "visualizer", "mdl_pruner"]
+packages = ["circuits"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -13,9 +13,18 @@ PaperTrack/
 │   └── sample_task.json      # Mock ARC task (4x4 horizontal-mirror transform)
 ├── src/
 │   ├── sandbox.py            # Restricted execution engine for LLM-generated code
-│   └── verifier.py           # Strict 100%-match verification with diff feedback
+│   ├── verifier.py           # Strict 100%-match verification with diff feedback
+│   ├── visualizer.py         # Dual numeric + visual grid formatter
+│   ├── mdl_pruner.py         # MDL selector (Occam's razor) for candidate code
+│   └── circuits/
+│       ├── __init__.py       # Three-tier cognitive architecture package
+│       ├── long_circuit.py   # Global taxonomy + strategic macro-plan
+│       ├── middle_circuit.py # Object decomposition + tactical blueprint
+│       └── short_circuit.py  # Iterative generate → verify → self-correct loop
 ├── tests/
-│   └── test_sandbox.py       # Unit + integration tests (pytest)
+│   ├── test_sandbox.py       # Sandbox + verifier tests
+│   └── test_circuits.py      # Three-tier architecture tests
+├── main.py                   # End-to-end pipeline entry point
 ├── conftest.py               # Makes src/ importable for tests
 ├── pyproject.toml            # Project metadata + pytest configuration
 ├── requirements.txt          # Runtime + dev dependencies
@@ -35,6 +44,31 @@ py -m pip install -r requirements.txt
 ```bash
 py -m pytest -v
 ```
+
+## Running the pipeline
+
+```bash
+py main.py
+```
+
+This loads `data/sample_task.json`, classifies the task taxonomy, decomposes
+the grids into objects, and runs the short circuit's generate → verify →
+self-correct loop end-to-end.
+
+## Three-tier cognitive architecture
+
+The agent is organised as three tiers inside `src/circuits/`:
+
+1. **Long circuit** (`long_circuit.py`) — classifies the task's global
+   taxonomy (Geometric/Rotation, Topological/Pathfinding, Counting/Scaling)
+   and emits a strategic macro-plan.
+2. **Middle circuit** (`middle_circuit.py`) — decomposes grids into objects
+   (bounding boxes, colour distributions, spatial layouts) and emits a
+   tactical sub-goal blueprint. It uses SciPy when available and falls back
+   to a pure-NumPy connected-component labelling otherwise.
+3. **Short circuit** (`short_circuit.py`) — runs the iterative generate →
+   verify → self-correct loop, feeding the verifier's differential feedback
+   back into the next prompt.
 
 ## Core API
 
