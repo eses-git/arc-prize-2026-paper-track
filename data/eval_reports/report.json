@@ -1,60 +1,178 @@
 {
   "meta": {
     "subset": "training",
-    "num_tasks": 2,
+    "num_tasks": 10,
     "max_attempts": 5,
-    "generated_at": "2026-10-16T22:30:31.478860+00:00",
+    "generated_at": "2026-10-28T17:28:04.644868+00:00",
     "note": "Offline deterministic mock LLM used unless LLM_PROVIDER is configured."
   },
   "configurations": {
     "baseline": {
-      "total_tasks": 2,
-      "solved": 0,
-      "success_rate": 0.0,
-      "average_attempts_per_solved_task": null,
+      "total_tasks": 10,
+      "solved": 8,
+      "success_rate": 0.8,
+      "average_attempts_per_solved_task": 1.0,
       "failure_modes": {
-        "wrong_test_output": 2
+        "execution_error": 2
       }
     },
     "full_system": {
-      "total_tasks": 2,
-      "solved": 0,
-      "success_rate": 0.0,
-      "average_attempts_per_solved_task": null,
-      "failure_modes": {
-        "no_solution": 2
-      }
+      "total_tasks": 10,
+      "solved": 10,
+      "success_rate": 1.0,
+      "average_attempts_per_solved_task": 1.0,
+      "failure_modes": {}
     }
   },
   "tasks": [
     {
       "task_id": "007bbfb7",
       "baseline": {
-        "solved": false,
-        "failure_mode": "wrong_test_output",
+        "solved": true,
+        "failure_mode": null,
         "attempts": 1,
-        "candidate_code": "def transform(grid):\n    return grid"
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    n = grid.shape[0]\n    output = np.zeros((n * n, n * n), dtype=grid.dtype)\n    for r in range(n):\n        for c in range(n):\n            if grid[r, c] != 0:\n                output[r*n:(r+1)*n, c*n:(c+1)*n] = grid\n    return output.tolist()"
       },
       "full_system": {
-        "solved": false,
-        "failure_mode": "no_solution",
-        "attempts": 5,
-        "candidate_code": null
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    out = np.zeros((9, 9), dtype=int)\n    for i in range(3):\n        for j in range(3):\n            if grid[i, j] != 0:\n                out[3*i:3*i+3, 3*j:3*j+3] = grid\n    return out"
       }
     },
     {
       "task_id": "00d62c1b",
       "baseline": {
-        "solved": false,
-        "failure_mode": "wrong_test_output",
+        "solved": true,
+        "failure_mode": null,
         "attempts": 1,
-        "candidate_code": "def transform(grid):\n    return grid"
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    rows, cols = grid.shape\n    visited = np.zeros((rows, cols), dtype=bool)\n    queue = []\n    \n    for r in range(rows):\n        for c in range(cols):\n            if (r == 0 or r == rows - 1 or c == 0 or c == cols - 1):\n                if grid[r, c] == 0:\n                    visited[r, c] = True\n                    queue.append((r, c))\n                    \n    head = 0\n    while head < len(queue):\n        r, c = queue[head]\n        head += 1\n        \n        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < rows and 0 <= nc < cols:\n                if not visited[nr, nc] and grid[nr, nc] == 0:\n                    visited[nr, nc] = True\n                    queue.append((nr, nc))\n                    \n    result = grid.copy()\n    result[(grid == 0) & (~visited)] = 4\n    return result.tolist()"
       },
       "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    rows, cols = grid.shape\n    visited = np.zeros((rows, cols), dtype=bool)\n    queue = []\n    \n    # Add all boundary 0s to the queue\n    for r in range(rows):\n        for c in range(cols):\n            if r == 0 or r == rows - 1 or c == 0 or c == cols - 1:\n                if grid[r, c] == 0:\n                    queue.append((r, c))\n                    visited[r, c] = True\n                    \n    # BFS to find all 0s connected to the boundary\n    head = 0\n    while head < len(queue):\n        r, c = queue[head]\n        head += 1\n        \n        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < rows and 0 <= nc < cols:\n                if not visited[nr, nc] and grid[nr, nc] == 0:\n                    visited[nr, nc] = True\n                    queue.append((nr, nc))\n                    \n    # Create output grid and fill enclosed 0s with 4\n    out = grid.copy()\n    for r in range(rows):\n        for c in range(cols):\n            if grid[r, c] == 0 and not visited[r, c]:\n                out[r, c] = 4\n                \n    return out.tolist()"
+      }
+    },
+    {
+      "task_id": "017c7c7b",
+      "baseline": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = [list(row) for row in grid]\n    h = len(grid)\n    \n    # Find the smallest repeating period of rows\n    period = h\n    for p in range(1, h + 1):\n        valid = True\n        for i in range(h):\n            if grid[i] != grid[i % p]:\n                valid = False\n                break\n        if valid:\n            period = p\n            break\n    \n    # Output height is 1.5x input height\n    out_h = h * 3 // 2\n    \n    # Tile the periodic pattern and replace 1 with 2\n    result = []\n    for i in range(out_h):\n        row = grid[i % period][:]\n        row = [2 if x == 1 else x for x in row]\n        result.append(row)\n    \n    return result"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    # Find the vertical period of the input pattern\n    for P in range(1, 7):\n        valid = True\n        for i in range(6):\n            if not np.array_equal(grid[i], grid[i % P]):\n                valid = False\n                break\n        if valid:\n            break\n            \n    # Extend the pattern to 9 rows\n    out = np.zeros((9, 3), dtype=int)\n    for i in range(9):\n        out[i] = grid[i % P]\n        \n    # Recolor the foreground object from 1 to 2\n    out[out == 1] = 2\n    return out"
+      }
+    },
+    {
+      "task_id": "025d127b",
+      "baseline": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    result = np.zeros_like(grid)\n    \n    colors = np.unique(grid)\n    colors = colors[colors != 0]\n    \n    for color in colors:\n        rows, cols = np.where(grid == color)\n        pixels = set(zip(rows.tolist(), cols.tolist()))\n        visited = set()\n        \n        for pixel in pixels:\n            if pixel in visited:\n                continue\n            \n            component = []\n            queue = [pixel]\n            visited.add(pixel)\n            \n            while queue:\n                r, c = queue.pop(0)\n                component.append((r, c))\n                \n                for dr in [-1, 0, 1]:\n                    for dc in [-1, 0, 1]:\n                        if dr == 0 and dc == 0:\n                            continue\n                        nr, nc = r + dr, c + dc\n                        if (nr, nc) in pixels and (nr, nc) not in visited:\n                            visited.add((nr, nc))\n                            queue.append((nr, nc))\n            \n            comp_rows = [p[0] for p in component]\n            comp_cols = [p[1] for p in component]\n            max_row = max(comp_rows)\n            max_col = max(comp_cols)\n            \n            for r, c in component:\n                if r == max_row:\n                    result[r, c] = color\n                else:\n                    new_c = min(c + 1, max_col)\n                    result[r, new_c] = color\n    \n    return result.tolist()"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    rows, cols = grid.shape\n    visited = np.zeros_like(grid, dtype=bool)\n    components = []\n    \n    # Find all connected components (8-connected)\n    for r in range(rows):\n        for c in range(cols):\n            if grid[r, c] != 0 and not visited[r, c]:\n                comp = []\n                queue = [(r, c)]\n                visited[r, c] = True\n                color = grid[r, c]\n                while queue:\n                    cr, cc = queue.pop(0)\n                    comp.append((cr, cc))\n                    for dr in [-1, 0, 1]:\n                        for dc in [-1, 0, 1]:\n                            if dr == 0 and dc == 0:\n                                continue\n                            nr, nc = cr + dr, cc + dc\n                            if 0 <= nr < rows and 0 <= nc < cols:\n                                if grid[nr, nc] == color and not visited[nr, nc]:\n                                    visited[nr, nc] = True\n                                    queue.append((nr, nc))\n                components.append((color, comp))\n                \n    out_grid = np.zeros_like(grid)\n    \n    # Process each component\n    for color, comp in components:\n        min_r = min(r for r, c in comp)\n        max_r = max(r for r, c in comp)\n        H = max_r - min_r + 1\n        \n        # Group pixels by row\n        row_dict = {}\n        for r, c in comp:\n            if r not in row_dict:\n                row_dict[r] = []\n            row_dict[r].append(c)\n            \n        # Apply the row-specific shift rule\n        for r, C in row_dict.items():\n            i = r - min_r\n            if i < H - 2:\n                # Top rows: shift entire segment right by 1\n                new_C = [c + 1 for c in C]\n            elif i == H - 2:\n                # Second to last row: shift left boundary right by 1, keep right boundary anchored\n                max_c = max(C)\n                new_C = [c + 1 if c != max_c else c for c in C]\n            else:\n                # Bottom row: keep entirely anchored\n                new_C = C\n                \n            # Write to output grid\n            for nc in set(new_C):\n                if 0 <= nc < cols:\n                    out_grid[r, nc] = color\n                    \n    return out_grid"
+      }
+    },
+    {
+      "task_id": "045e512c",
+      "baseline": {
         "solved": false,
-        "failure_mode": "no_solution",
-        "attempts": 5,
-        "candidate_code": null
+        "failure_mode": "execution_error",
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    import numpy as np\n    grid = np.array(grid)\n    H, W = grid.shape\n    visited = np.zeros((H, W), dtype=bool)\n    components = []\n    \n    for r in range(H):\n        for c in range(W):\n            if grid[r, c] != 0 and not visited[r, c]:\n                comp = []\n                stack = [(r, c)]\n                visited[r, c] = True\n                while stack:\n                    cr, cc = stack.pop()\n                    comp.append((cr, cc))\n                    for dr in [-1, 0, 1]:\n                        for dc in [-1, 0, 1]:\n                            if dr == 0 and dc == 0:\n                                continue\n                            nr, nc = cr + dr, cc + dc\n                            if 0 <= nr < H and 0 <= nc < W:\n                                if grid[nr, nc] != 0 and not visited[nr, nc]:\n                                    visited[nr, nc] = True\n                                    stack.append((nr, nc))\n                components.append(comp)\n                \n    if not components:\n        return grid\n        \n    base_comp = max(components, key=len)\n    base_r = np.mean([p[0] for p in base_comp])\n    base_c = np.mean([p[1] for p in base_comp])\n    \n    out = np.zeros_like(grid)\n    \n    for r, c in base_comp:\n        out[r, c] = grid[r, c]\n        \n    for comp in components:\n        if comp is base_comp:\n            continue\n        color = grid[comp[0][0], comp[0][1]]\n        obj_r = np.mean([p[0] for p in comp])\n        obj_c = np.mean([p[1] for p in comp])\n        \n        rel_r = obj_r - base_r\n        rel_c = obj_c - base_c\n        \n        dr = 4 if rel_r > 0 else (-4 if rel_r < 0 else 0)\n        dc = 4 if rel_c > 0 else (-4 if rel_c < 0 else 0)\n        \n        if dr == 0 and dc == 0:\n            continue\n            \n        k = 1\n        while k < 20:\n            in_bounds = False\n            for r, c in base_comp:\n                pr, pc = r + k * dr, c + k * dc\n                if 0 <= pr < H and 0 <= pc < W:\n                    in_bounds = True\n                    break\n            \n            if not in_bounds:\n                break\n                \n            for r, c in base_comp:\n                pr, pc = r + k * dr, c + k * dc\n                if 0 <= pr < H and 0 <= pc < W:\n                    out[pr, pc] = color\n                    \n            k += 1\n            \n    return out"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    H, W = grid.shape\n    visited = np.zeros((H, W), dtype=bool)\n    components = []\n    \n    # 8-connectivity neighbors\n    neighbors = [(-1,-1), (-1,0), (-1,1),\n                 (0,-1),           (0,1),\n                 (1,-1),  (1,0),   (1,1)]\n                 \n    for r in range(H):\n        for c in range(W):\n            if grid[r, c] != 0 and not visited[r, c]:\n                comp = []\n                queue = [(r, c)]\n                visited[r, c] = True\n                color = grid[r, c]\n                while queue:\n                    cr, cc = queue.pop(0)\n                    comp.append((cr, cc))\n                    for dr, dc in neighbors:\n                        nr, nc = cr + dr, cc + dc\n                        if 0 <= nr < H and 0 <= nc < W:\n                            if not visited[nr, nc] and grid[nr, nc] == color:\n                                visited[nr, nc] = True\n                                queue.append((nr, nc))\n                components.append({\n                    'color': color,\n                    'cells': comp,\n                    'r_min': min(x[0] for x in comp),\n                    'r_max': max(x[0] for x in comp),\n                    'c_min': min(x[1] for x in comp),\n                    'c_max': max(x[1] for x in comp)\n                })\n                \n    base = None\n    fragments = []\n    for comp in components:\n        # The base object is uniquely identified by having a 3x3 bounding box\n        if comp['r_max'] - comp['r_min'] == 2 and comp['c_max'] - comp['c_min'] == 2:\n            if base is None:\n                base = comp\n            else:\n                # Fallback in case of multiple 3x3 bboxes: pick the one with more cells\n                if len(comp['cells']) > len(base['cells']):\n                    fragments.append(base)\n                    base = comp\n                else:\n                    fragments.append(comp)\n        else:\n            fragments.append(comp)\n            \n    if base is None:\n        return grid\n        \n    # Extract the 3x3 pattern of the base object\n    pattern = np.zeros((3, 3), dtype=bool)\n    for r, c in base['cells']:\n        pattern[r - base['r_min'], c - base['c_min']] = True\n        \n    base_center_r = base['r_min'] + 1.0\n    base_center_c = base['c_min'] + 1.0\n    \n    # Determine the rays (directions and colors) from the fragments\n    rays = {}\n    for frag in fragments:\n        frag_center_r = (frag['r_min'] + frag['r_max']) / 2.0\n        frag_center_c = (frag['c_min'] + frag['c_max']) / 2.0\n        \n        dr = frag_center_r - base_center_r\n        dc = frag_center_c - base_center_c\n        \n        step_r = 0 if dr == 0 else (1 if dr > 0 else -1)\n        step_c = 0 if dc == 0 else (1 if dc > 0 else -1)\n        \n        if step_r == 0 and step_c == 0:\n            continue\n            \n        direction = (step_r, step_c)\n        if direction not in rays:\n            rays[direction] = frag['color']\n            \n    output = grid.copy()\n    \n    # Cast rays and draw the tiled 3x3 patterns\n    for (step_r, step_c), color in rays.items():\n        k = 1\n        while True:\n            # Stride of 4 (3 cells pattern + 1 cell gap)\n            curr_r = base['r_min'] + k * step_r * 4\n            curr_c = base['c_min'] + k * step_c * 4\n            \n            # Stop if the 3x3 tile is completely out of bounds\n            if curr_r >= H or curr_c >= W or curr_r + 2 < 0 or curr_c + 2 < 0:\n                break\n                \n            for i in range(3):\n                for j in range(3):\n                    if pattern[i, j]:\n                        r = curr_r + i\n                        c = curr_c + j\n                        if 0 <= r < H and 0 <= c < W:\n                            output[r, c] = color\n                            \n            k += 1\n            \n    return output"
+      }
+    },
+    {
+      "task_id": "0520fde7",
+      "baseline": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    left = grid[:, 0:3]\n    right = grid[:, 4:7]\n    output = np.where((left == 1) & (right == 1), 2, 0)\n    return output.tolist()"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    left = grid[:, :3]\n    right = grid[:, 4:]\n    out = np.zeros((3, 3), dtype=int)\n    out[(left == 1) & (right == 1)] = 2\n    return out"
+      }
+    },
+    {
+      "task_id": "05269061",
+      "baseline": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    rows, cols = grid.shape\n    \n    mapping = {}\n    for r in range(rows):\n        for c in range(cols):\n            if grid[r, c] != 0:\n                mapping[(r + c) % 3] = int(grid[r, c])\n    \n    output = np.zeros((rows, cols), dtype=int)\n    for r in range(rows):\n        for c in range(cols):\n            output[r, c] = mapping[(r + c) % 3]\n    \n    return output.tolist()"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    mapping = {}\n    rows, cols = grid.shape\n    for r in range(rows):\n        for c in range(cols):\n            v = grid[r, c]\n            if v != 0:\n                mapping[(r + c) % 3] = v\n    \n    out = np.zeros_like(grid)\n    for r in range(rows):\n        for c in range(cols):\n            out[r, c] = mapping.get((r + c) % 3, 0)\n            \n    return out"
+      }
+    },
+    {
+      "task_id": "05f2a901",
+      "baseline": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    \n    twos = np.argwhere(grid == 2)\n    eights = np.argwhere(grid == 8)\n    \n    t_row_min, t_row_max = twos[:, 0].min(), twos[:, 0].max()\n    t_col_min, t_col_max = twos[:, 1].min(), twos[:, 1].max()\n    \n    e_row_min, e_row_max = eights[:, 0].min(), eights[:, 0].max()\n    e_col_min, e_col_max = eights[:, 1].min(), eights[:, 1].max()\n    \n    h_overlap = t_col_min <= e_col_max and e_col_min <= t_col_max\n    v_overlap = t_row_min <= e_row_max and e_row_min <= t_row_max\n    \n    output = grid.copy()\n    output[grid == 2] = 0\n    \n    if h_overlap and not v_overlap:\n        if t_row_max < e_row_min:\n            shift = e_row_min - t_row_max - 1\n        else:\n            shift = -(t_row_min - e_row_max - 1)\n        for r, c in twos:\n            output[r + shift, c] = 2\n    elif v_overlap and not h_overlap:\n        if t_col_max < e_col_min:\n            shift = e_col_min - t_col_max - 1\n        else:\n            shift = -(t_col_min - e_col_max - 1)\n        for r, c in twos:\n            output[r, c + shift] = 2\n    \n    return output.tolist()"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    out = np.zeros_like(grid)\n    \n    # Find coordinates of 2 and 8\n    r2, c2 = np.where(grid == 2)\n    r8, c8 = np.where(grid == 8)\n    \n    if len(r2) == 0 or len(r8) == 0:\n        return grid.tolist()\n        \n    r2_min, r2_max = r2.min(), r2.max()\n    c2_min, c2_max = c2.min(), c2.max()\n    \n    r8_min, r8_max = r8.min(), r8.max()\n    c8_min, c8_max = c8.min(), c8.max()\n    \n    overlap_c = max(0, min(c2_max, c8_max) - max(c2_min, c8_min) + 1)\n    overlap_r = max(0, min(r2_max, r8_max) - max(r2_min, r8_min) + 1)\n    \n    shift_r, shift_c = 0, 0\n    \n    if overlap_c > 0:\n        if r2_max < r8_min:\n            shift_r = r8_min - 1 - r2_max\n        elif r2_min > r8_max:\n            shift_r = r8_max + 1 - r2_min\n    elif overlap_r > 0:\n        if c2_max < c8_min:\n            shift_c = c8_min - 1 - c2_max\n        elif c2_min > c8_max:\n            shift_c = c8_max + 1 - c2_min\n    else:\n        # Fallback if no overlap in either axis\n        dr = r8_min - 1 - r2_max if r2_max < r8_min else (r8_max + 1 - r2_min if r2_min > r8_max else 0)\n        dc = c8_min - 1 - c2_max if c2_max < c8_min else (c8_max + 1 - c2_min if c2_min > c8_max else 0)\n        if abs(dr) <= abs(dc):\n            shift_r = dr\n        else:\n            shift_c = dc\n\n    # Place 8\n    out[r8, c8] = 8\n    \n    # Place 2\n    out[r2 + shift_r, c2 + shift_c] = 2\n    \n    return out.tolist()"
+      }
+    },
+    {
+      "task_id": "06df4c85",
+      "baseline": {
+        "solved": false,
+        "failure_mode": "execution_error",
+        "attempts": 1,
+        "candidate_code": "import numpy as np\n\ndef transform(grid):\n    grid = np.array(grid)\n    H, W = grid.shape\n    R = (H + 1) // 3\n    C = (W + 1) // 3\n    \n    cells = np.zeros((R, C), dtype=int)\n    for r in range(R):\n        for c in range(C):\n            cells[r, c] = grid[3*r, 3*c]\n            \n    fills = []\n    for r in range(R):\n        row = cells[r, :]\n        for color in np.unique(row):\n            if color != 0:\n                indices = np.where(row == color)[0]\n                if len(indices) >= 2:\n                    fills.append(('row', r, indices[0], indices[-1], color))\n                    \n    for c in range(C):\n        col = cells[:, c]\n        for color in np.unique(col):\n            if color != 0:\n                indices = np.where(col == color)[0]\n                if len(indices) >= 2:\n                    fills.append(('col', c, indices[0], indices[-1], color))\n                    \n    for f in fills:\n        if f[0] == 'row':\n            _, r, c1, c2, color = f\n            cells[r, c1:c2+1] = color\n        else:\n            _, c, r1, r2, color = f\n            cells[r1:r2+1, c] = color\n            \n    out_grid = np.copy(grid)\n    for r in range(R):\n        for c in range(C):\n            color = cells[r, c]\n            out_grid[3*r:3*r+2, 3*c:3*c+2] = color\n            \n    return out_grid"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    H, W = grid.shape\n    num_rows = (H + 1) // 3\n    num_cols = (W + 1) // 3\n    \n    # Extract the 2x2 cells\n    cells = np.zeros((num_rows, num_cols), dtype=int)\n    for i in range(num_rows):\n        for j in range(num_cols):\n            r = 3 * i\n            c = 3 * j\n            block = grid[r:r+2, c:c+2]\n            cells[i, j] = np.max(block)\n            \n    out_cells = cells.copy()\n    \n    # Horizontal propagation (Row fills)\n    for i in range(num_rows):\n        row = cells[i, :]\n        colors = np.unique(row)\n        for color in colors:\n            if color == 0:\n                continue\n            idx = np.where(row == color)[0]\n            min_j, max_j = idx[0], idx[-1]\n            out_cells[i, min_j:max_j+1] = color\n            \n    # Vertical propagation (Column fills)\n    for j in range(num_cols):\n        col = cells[:, j]\n        colors = np.unique(col)\n        for color in colors:\n            if color == 0:\n                continue\n            idx = np.where(col == color)[0]\n            min_i, max_i = idx[0], idx[-1]\n            out_cells[min_i:max_i+1, j] = color\n            \n    # Reconstruct the grid\n    out_grid = grid.copy()\n    for i in range(num_rows):\n        for j in range(num_cols):\n            r = 3 * i\n            c = 3 * j\n            color = out_cells[i, j]\n            out_grid[r:r+2, c:c+2] = color\n            \n    return out_grid"
+      }
+    },
+    {
+      "task_id": "08ed6ac7",
+      "baseline": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    result = np.zeros_like(grid)\n    \n    col_counts = []\n    for c in range(grid.shape[1]):\n        count = int(np.sum(grid[:, c] == 5))\n        if count > 0:\n            col_counts.append((count, c))\n    \n    col_counts.sort(key=lambda x: -x[0])\n    \n    for label, (count, c) in enumerate(col_counts, start=1):\n        result[grid[:, c] == 5, c] = label\n    \n    return result.tolist()"
+      },
+      "full_system": {
+        "solved": true,
+        "failure_mode": null,
+        "attempts": 1,
+        "candidate_code": "def transform(grid):\n    grid = np.array(grid)\n    out = np.zeros_like(grid)\n    rows, cols = grid.shape\n    visited = np.zeros_like(grid, dtype=bool)\n    \n    components = []\n    \n    for r in range(rows):\n        for c in range(cols):\n            if grid[r, c] == 5 and not visited[r, c]:\n                comp = []\n                stack = [(r, c)]\n                visited[r, c] = True\n                while stack:\n                    cr, cc = stack.pop()\n                    comp.append((cr, cc))\n                    for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:\n                        nr, nc = cr + dr, cc + dc\n                        if 0 <= nr < rows and 0 <= nc < cols:\n                            if grid[nr, nc] == 5 and not visited[nr, nc]:\n                                visited[nr, nc] = True\n                                stack.append((nr, nc))\n                components.append(comp)\n                \n    components.sort(key=lambda x: len(x), reverse=True)\n    \n    for i, comp in enumerate(components):\n        color = i + 1\n        for r, c in comp:\n            out[r, c] = color\n            \n    return out"
       }
     }
   ]

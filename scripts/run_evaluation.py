@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -55,6 +56,29 @@ from tta_transforms import (  # noqa: E402
     apply_tta_transform,
     reverse_tta_transform,
 )
+
+# ---------------------------------------------------------------------------
+# Secret loading (local ``.env`` + Kaggle).  Keeps API keys out of git while
+# remaining seamless across local and Kaggle environments.  Both paths are
+# best-effort: the offline mock LLM fallback still works when no key exists.
+# ---------------------------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()  # no-op when .env is absent; merges values into os.environ
+except ImportError:  # python-dotenv not installed -> use already-set env vars
+    load_dotenv = None
+
+if "LLM_API_KEY" not in os.environ:
+    try:
+        from kaggle_secrets import UserSecretsClient
+
+        _api_key = UserSecretsClient().get_secret("LLM_API_KEY")
+        if _api_key:
+            os.environ["LLM_API_KEY"] = _api_key
+    except (ImportError, Exception):
+        # ``kaggle_secrets`` only exists inside Kaggle kernels; ignore locally.
+        pass
 
 # Default destination and report locations (repo root / data / ...).
 _DEFAULT_DEST = Path(__file__).resolve().parents[1] / "data" / "arc_eval"

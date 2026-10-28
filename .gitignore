@@ -33,3 +33,6 @@ Thumbs.db
 
 # Downloaded datasets
 data/arc_eval/
+
+# Environment / secrets (never commit real keys)
+.env

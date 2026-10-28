@@ -32,6 +32,29 @@ from mdl_pruner import select_best_candidate
 from verifier import verify_solution
 from visualizer import format_grid_dual
 
+# ---------------------------------------------------------------------------
+# Secret loading (local ``.env`` + Kaggle).  Keeps API keys out of git while
+# remaining seamless across local and Kaggle environments.  Both paths are
+# best-effort: the offline mock LLM fallback still works when no key exists.
+# ---------------------------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()  # no-op when .env is absent; merges values into os.environ
+except ImportError:  # python-dotenv not installed -> use already-set env vars
+    load_dotenv = None
+
+if "LLM_API_KEY" not in os.environ:
+    try:
+        from kaggle_secrets import UserSecretsClient
+
+        _api_key = UserSecretsClient().get_secret("LLM_API_KEY")
+        if _api_key:
+            os.environ["LLM_API_KEY"] = _api_key
+    except (ImportError, Exception):
+        # ``kaggle_secrets`` only exists inside Kaggle kernels; ignore locally.
+        pass
+
 __all__ = ["run_short_circuit"]
 
 # Marker injected into prompts that carry self-correction feedback.  The mock
@@ -46,6 +69,9 @@ _MIRROR_SOLUTION = "def transform(grid):\n    return np.fliplr(grid)\n"
 
 # Matches a triple-backtick fenced block, optionally preceded by a language tag.
 _FENCE_RE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
+# Prefers an explicitly Python-labelled fence so thinking text wrapped in a
+# plain fence never shadows the real code block.
+_PYTHON_FENCE_RE = re.compile(r"```(?:python|py)[^\n]*\n(.*?)```", re.DOTALL)
 
 # Number of candidate programs sampled per attempt.  Several samples let the
 # MDL selector choose the cleanest among multiple verified solutions.
@@ -77,9 +103,10 @@ def _format_training_examples(train_pairs: list[dict]) -> str:
 def _extract_code(response: str) -> str:
     """Extract a bare code string from a raw LLM response.
 
-    LLMs frequently wrap code in triple-backtick fences (often with a language
-    tag).  This strips the fence when present and otherwise returns the raw
-    response, trimmed of surrounding whitespace.
+    LLMs frequently wrap code in triple-backtick fences, and reasoning models
+    often prefix the code with free-form "thinking" text.  This prefers an
+    explicit ``python``/``py`` fence, falls back to the first plain fence, then
+    to a bare ``def transform(...)``, and finally returns the raw response.
 
     Args:
         response: The raw text returned by the LLM.
@@ -89,9 +116,18 @@ def _extract_code(response: str) -> str:
     """
     if not isinstance(response, str):
         return ""
-    match = _FENCE_RE.search(response)
-    code = match.group(1) if match else response
-    return code.strip()
+
+    match = _PYTHON_FENCE_RE.search(response) or _FENCE_RE.search(response)
+    if match:
+        return match.group(1).strip()
+
+    # No fence: if the response is thinking text followed by a bare function,
+    # keep only the function definition onwards.
+    def_match = re.search(r"def\s+transform\s*\(", response)
+    if def_match:
+        return response[def_match.start():].strip()
+
+    return response.strip()
 
 
 def _format_feedback(attempt: int, failures: list[tuple[str, str]]) -> str:
@@ -182,7 +218,7 @@ def _http_post_json(url: str, payload: dict, headers: dict) -> dict:
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urllib.request.urlopen(request, timeout=300) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")
@@ -208,8 +244,88 @@ def _call_anthropic(prompt: str, api_key: str, model: str) -> str:
     return data["content"][0]["text"]
 
 
+def _extract_reasoning_text(reasoning) -> str | None:
+    """Extract text from a ``reasoning`` field of any common shape.
+
+    Reasoning tokens may arrive as a plain string, as a dict with a ``"text"``
+    key (e.g. ``{"text": "..."}``), or as a list of structured blocks.
+    """
+    if isinstance(reasoning, str):
+        return reasoning.strip() or None
+
+    if isinstance(reasoning, dict):
+        text = reasoning.get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+
+    if isinstance(reasoning, list):
+        parts: list[str] = []
+        for block in reasoning:
+            if isinstance(block, dict) and isinstance(block.get("text"), str):
+                text = block["text"].strip()
+                if text:
+                    parts.append(text)
+        if parts:
+            return "\n".join(parts)
+
+    return None
+
+
+def _extract_message_content(message: dict) -> str | None:
+    """Extract assistant text from a chat message, prioritising the answer.
+
+    Reasoning models (e.g. Qwen 3.7 Max) may return ``content`` as a list of
+    structured blocks, as a plain string, or empty while placing thinking
+    tokens in a separate ``reasoning`` / ``reasoning_content`` field.  The
+    primary text content block is always preferred; reasoning fields are only
+    used as a fallback when no answer text is present.
+    """
+    if not isinstance(message, dict):
+        return None
+
+    content = message.get("content")
+
+    # 1) Primary answer: a plain, non-empty string.  An empty string is
+    # treated the same as a missing field so the reasoning fallback below can
+    # still recover the answer for reasoning models that emit empty content.
+    if isinstance(content, str) and content:
+        return content
+
+    # 2) Primary answer: a list of structured blocks -> join the text blocks.
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and "text" in block
+            ):
+                text = block.get("text")
+                if isinstance(text, str) and text:
+                    parts.append(text)
+        if parts:
+            return "\n".join(parts)
+
+    # 3) Fallback: reasoning tokens when there is no plain answer text.
+    reasoning_text = _extract_reasoning_text(message.get("reasoning"))
+    if reasoning_text:
+        return reasoning_text
+
+    reasoning_text = _extract_reasoning_text(message.get("reasoning_content"))
+    if reasoning_text:
+        return reasoning_text
+
+    return None
+
+
 def _call_openai(prompt: str, api_key: str, model: str, base_url: str) -> str:
-    """Call an OpenAI-compatible Chat Completions endpoint."""
+    """Call an OpenAI-compatible Chat Completions endpoint.
+
+    The response is parsed defensively so that OpenAI, vLLM, and assorted
+    direct-response gateways all work, and so that a backend which returns an
+    ``{"error": ...}`` body (possibly with an HTTP 200 status) surfaces a clear
+    ``RuntimeError`` instead of a confusing ``KeyError``.
+    """
     base = base_url.rstrip("/") or "https://api.openai.com/v1"
     url = f"{base}/chat/completions"
     payload = {
@@ -222,7 +338,38 @@ def _call_openai(prompt: str, api_key: str, model: str, base_url: str) -> str:
         "Content-Type": "application/json",
     }
     data = _http_post_json(url, payload, headers)
-    return data["choices"][0]["message"]["content"]
+
+    # 0) Some gateways wrap the response in an envelope like
+    #    ``{"data": {...}, "success": ...}``; unwrap it before parsing.
+    if isinstance(data, dict) and "choices" not in data and isinstance(data.get("data"), dict):
+        data = data["data"]
+
+    # 1) Some backends report failures inside the 200 response body.
+    if "error" in data:
+        raise RuntimeError(f"API Error: {data['error']}")
+
+    # 2) Inspect ``choices[0]["message"]`` for list/string/reasoning content,
+    #    then fall back to legacy completion and direct-response shapes.
+    content: str | None = None
+
+    choices = data.get("choices") or []
+    first = choices[0] if choices and isinstance(choices[0], dict) else {}
+
+    if first:
+        message = first.get("message")
+        content = _extract_message_content(message) if isinstance(message, dict) else None
+        if content is None:
+            content = first.get("text")
+
+    if content is None:
+        content = data.get("content") or data.get("text")
+
+    if content is None:
+        # Surface the full payload so an unexpected shape is easy to debug.
+        print(f"Unexpected LLM response payload: {data}")
+        raise RuntimeError(f"Unexpected response format: {data}")
+
+    return content
 
 
 def _call_ollama(prompt: str, model: str, base_url: str) -> str:
