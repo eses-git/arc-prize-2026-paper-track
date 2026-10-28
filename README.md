@@ -173,10 +173,18 @@ copy .env.example .env    # Windows
 Then edit `.env`:
 
 ```dotenv
+Model that was tested on : 
 LLM_PROVIDER=openai
 LLM_API_KEY=your_actual_api_key_here
-LLM_MODEL_NAME=gpt-4o-mini
-LLM_BASE_URL=
+LLM_MODEL_NAME=cline-pass/qwen3.7-max
+LLM_BASE_URL=https://api.cline.bot/api/v1
+
+------------------------------------------------
+LLM_PROVIDER=openai
+LLM_API_KEY=your_actual_api_key_here
+LLM_MODEL_NAME=gemini-3.5-flash-lite
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+
 ```
 
 ### Variable reference
@@ -188,14 +196,9 @@ LLM_BASE_URL=
 | `LLM_MODEL_NAME` | Model identifier; falls back to a per-provider default. | `gpt-4o-mini` |
 | `LLM_BASE_URL` | Optional endpoint override (Ollama / self-hosted vLLM). | `http://localhost:11434` |
 
-### Provider defaults
 
-When `LLM_MODEL_NAME` is left empty, the agent uses these defaults:
 
-- `anthropic` → `claude-3-5-sonnet-latest`
-- `openai` → `gpt-4o-mini`
-- `vllm` → `meta-llama/Meta-Llama-3-8B-Instruct`
-- `ollama` → `llama3`
+
 
 > **Deep-reasoning note.** The LLM HTTP client uses a **300-second timeout** to
 > accommodate slow reasoning-token generation on larger tasks.
